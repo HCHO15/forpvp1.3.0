@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>戦術対抗戦S10　配置確認 1.1.3</title>
+<title>戦術対抗戦S10　配置確認 1.2.0</title>
 <style>
   body { text-align:center; font-family:sans-serif; }
   canvas { border:1px solid #333; touch-action:none; background-size:cover; }
@@ -10,7 +10,6 @@
   #counter { margin-top:10px; font-size:18px; }
   .max { color:red; font-weight:bold; }
 
-  /* Canvas と説明文を横並びにする */
   .container {
     display: flex;
     justify-content: center;
@@ -20,7 +19,7 @@
   }
 
   .description {
-    width: 250px;
+    width: 260px;
     text-align: left;
     font-size: 16px;
     line-height: 1.5;
@@ -29,11 +28,17 @@
 </head>
 <body>
 
-<h2>戦術対抗戦S10　配置確認 1.1.3</h2>
+<h2>戦術対抗戦S10　配置確認 1.2.0</h2>
 
 <button id="toggleColor">現在：赤 → 青に切替</button>
 <button id="toggleLine">線の表示 ON/OFF</button>
 <button id="reset">リセット</button>
+
+<br>
+
+<button id="mode1">SPアタッカー</button>
+<button id="mode2">SPバフ</button>
+<button id="mode3">STバフ</button>
 
 <div id="counter">
   赤: <span id="redCount">0</span> / 4　
@@ -42,14 +47,18 @@
 
 <div class="container">
 
-  <!-- Canvas を大きくする（800×400） -->
   <canvas id="board" width="800" height="400"></canvas>
 
-  <!-- 説明文 -->
   <div class="description">
     <p>左クリックでプロット、右クリックで削除できます。</p>
     <p>ドラッグすると置いた点を動かせます。</p>
     <p>バツ印が部隊中央、丸で囲まれた点がターゲットを表します。</p>
+    <p>モード切替：</p>
+    <ul>
+      <li>SPアタッカー：重心→異色の最短点</li>
+      <li>SPバフ：重心→同色の最短点</li>
+      <li>STバフ：ダブルクリックした点→同色の最短点</li>
+    </ul>
   </div>
 
 </div>
@@ -58,37 +67,44 @@
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
 
-// 背景画像
 const bg = new Image();
 bg.src = "background.png";
 
-let mode = "red"; 
+let mode = "red";
 let showLines = true;
 
 let redPoints = [];
 let bluePoints = [];
 
-// ドラッグ用
 let dragging = false;
 let dragTarget = null;
 
-// 色切り替え（トグル）
+let modeType = 1; // 1=SPアタッカー, 2=SPバフ, 3=STバフ
+let selectedPoint = null;
+
+// 色切替
 document.getElementById("toggleColor").onclick = () => {
   mode = (mode === "red") ? "blue" : "red";
   document.getElementById("toggleColor").textContent =
     `現在：${mode === "red" ? "赤" : "青"} → ${mode === "red" ? "青" : "赤"}に切替`;
 };
 
-// 線の表示 ON/OFF
+// 線の表示
 document.getElementById("toggleLine").onclick = () => {
   showLines = !showLines;
   draw();
 };
 
+// モード切替
+document.getElementById("mode1").onclick = () => { modeType = 1; selectedPoint = null; draw(); };
+document.getElementById("mode2").onclick = () => { modeType = 2; selectedPoint = null; draw(); };
+document.getElementById("mode3").onclick = () => { modeType = 3; selectedPoint = null; draw(); };
+
 // リセット
 document.getElementById("reset").onclick = () => {
   redPoints = [];
   bluePoints = [];
+  selectedPoint = null;
   updateCounter();
   draw();
 };
@@ -97,14 +113,12 @@ document.getElementById("reset").onclick = () => {
 canvas.addEventListener("mousedown", (e) => {
   const {x, y} = getMousePos(e);
 
-  // 既存の点を掴めるかチェック
   dragTarget = findPointAt(x, y);
   if (dragTarget) {
     dragging = true;
     return;
   }
 
-  // 新規追加
   if (mode === "red" && redPoints.length < 4) redPoints.push({x,y});
   if (mode === "blue" && bluePoints.length < 4) bluePoints.push({x,y});
 
@@ -112,14 +126,12 @@ canvas.addEventListener("mousedown", (e) => {
   draw();
 });
 
-// ドラッグ中の移動
+// ドラッグ中
 canvas.addEventListener("mousemove", (e) => {
   if (!dragging || !dragTarget) return;
-
   const {x, y} = getMousePos(e);
   dragTarget.x = x;
   dragTarget.y = y;
-
   draw();
 });
 
@@ -129,7 +141,27 @@ canvas.addEventListener("mouseup", () => {
   dragTarget = null;
 });
 
-// 右クリックで削除
+// ダブルクリックで基準点設定（STバフ）
+canvas.addEventListener("dblclick", (e) => {
+  const {x, y} = getMousePos(e);
+
+  for (const p of redPoints) {
+    if (Math.hypot(p.x - x, p.y - y) < 10) {
+      selectedPoint = { ...p, color: "red" };
+      draw();
+      return;
+    }
+  }
+  for (const p of bluePoints) {
+    if (Math.hypot(p.x - x, p.y - y) < 10) {
+      selectedPoint = { ...p, color: "blue" };
+      draw();
+      return;
+    }
+  }
+});
+
+// 右クリック削除
 canvas.addEventListener("contextmenu", (e) => {
   e.preventDefault();
   const {x, y} = getMousePos(e);
@@ -146,27 +178,20 @@ canvas.addEventListener("contextmenu", (e) => {
   draw();
 });
 
-// マウス座標取得
+// 座標取得
 function getMousePos(e) {
   const rect = canvas.getBoundingClientRect();
-  return {
-    x: e.clientX - rect.left,
-    y: e.clientY - rect.top
-  };
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
-// 点を掴めるか判定
+// 点を掴む
 function findPointAt(x, y) {
-  for (const p of redPoints) {
-    if (Math.hypot(p.x - x, p.y - y) < 10) return p;
-  }
-  for (const p of bluePoints) {
-    if (Math.hypot(p.x - x, p.y - y) < 10) return p;
-  }
+  for (const p of redPoints) if (Math.hypot(p.x - x, p.y - y) < 10) return p;
+  for (const p of bluePoints) if (Math.hypot(p.x - x, p.y - y) < 10) return p;
   return null;
 }
 
-// 重心計算
+// 重心
 function centroid(points) {
   if (points.length === 0) return null;
   const x = points.reduce((s,p)=>s+p.x,0) / points.length;
@@ -175,33 +200,25 @@ function centroid(points) {
 }
 
 // 最も近い点
-function nearest(from, toList) {
-  if (!from || toList.length === 0) return null;
-  let best = null;
-  let bestDist = Infinity;
-  for (const p of toList) {
+function nearest(from, list) {
+  if (!from || list.length === 0) return null;
+  let best = null, bestDist = Infinity;
+  for (const p of list) {
     const d = Math.hypot(p.x - from.x, p.y - from.y);
-    if (d < bestDist) {
-      bestDist = d;
-      best = p;
-    }
+    if (d < bestDist) { bestDist = d; best = p; }
   }
   return best;
 }
 
-// カウンター更新
+// カウンター
 function updateCounter() {
-  const r = document.getElementById("redCount");
-  const b = document.getElementById("blueCount");
-
-  r.textContent = redPoints.length;
-  b.textContent = bluePoints.length;
-
-  r.className = (redPoints.length === 4) ? "max" : "";
-  b.className = (bluePoints.length === 4) ? "max" : "";
+  redCount.textContent = redPoints.length;
+  blueCount.textContent = bluePoints.length;
+  redCount.className = (redPoints.length === 4) ? "max" : "";
+  blueCount.className = (bluePoints.length === 4) ? "max" : "";
 }
 
-// バッテン描画
+// バッテン
 function drawCross(x, y, size, color) {
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
@@ -213,14 +230,20 @@ function drawCross(x, y, size, color) {
   ctx.stroke();
 }
 
+// 円
+function drawCircle(x, y, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(x, y, 14, 0, Math.PI*2);
+  ctx.stroke();
+}
+
 // 描画
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // 背景画像
   ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
 
-  // 点描画
   for (const p of redPoints) {
     ctx.fillStyle = "red";
     ctx.beginPath();
@@ -237,62 +260,75 @@ function draw() {
   const cRed = centroid(redPoints);
   const cBlue = centroid(bluePoints);
 
-  // 重心（バッテン）
   if (cRed) drawCross(cRed.x, cRed.y, 8, "pink");
   if (cBlue) drawCross(cBlue.x, cBlue.y, 8, "lightblue");
 
- // 最も近い点を円で強調（色を逆にした）
-if (cRed) {
-  const nearBlue = nearest(cRed, bluePoints);
-  if (nearBlue) {
-    ctx.strokeStyle = "rgba(255,150,150,0.5)"; // ← ピンクに変更
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(nearBlue.x, nearBlue.y, 14, 0, Math.PI*2);
-    ctx.stroke();
-  }
-}
+  // === モード別ターゲット表示 ===
 
-if (cBlue) {
-  const nearRed = nearest(cBlue, redPoints);
-  if (nearRed) {
-    ctx.strokeStyle = "rgba(100,150,255,0.5)"; // ← 水色に変更
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(nearRed.x, nearRed.y, 14, 0, Math.PI*2);
-    ctx.stroke();
+  // 1. SPアタッカー（重心→異色）
+  if (modeType === 1) {
+    if (cRed) {
+      const t = nearest(cRed, bluePoints);
+      if (t) drawCircle(t.x, t.y, "pink");
+    }
+    if (cBlue) {
+      const t = nearest(cBlue, redPoints);
+      if (t) drawCircle(t.x, t.y, "lightblue");
+    }
   }
-}
 
-  // 線の表示
+  // 2. SPバフ（重心→同色）
+  if (modeType === 2) {
+    if (cRed) {
+      const t = nearest(cRed, redPoints);
+      if (t) drawCircle(t.x, t.y, "rgba(255,150,150,0.5)");
+    }
+    if (cBlue) {
+      const t = nearest(cBlue, bluePoints);
+      if (t) drawCircle(t.x, t.y, "rgba(100,150,255,0.5)");
+    }
+  }
+
+  // 3. STバフ（基準点→同色）
+  if (modeType === 3 && selectedPoint) {
+    drawCross(selectedPoint.x, selectedPoint.y, 10, "yellow");
+
+    if (selectedPoint.color === "red") {
+      const t = nearest(selectedPoint, redPoints);
+      if (t) drawCircle(t.x, t.y, "rgba(255,150,150,0.5)");
+    }
+
+    if (selectedPoint.color === "blue") {
+      const t = nearest(selectedPoint, bluePoints);
+      if (t) drawCircle(t.x, t.y, "rgba(100,150,255,0.5)");
+    }
+  }
+
+  // 線表示
   if (showLines) {
     if (cRed) {
-      const nearBlue = nearest(cRed, bluePoints);
-      if (nearBlue) {
+      const t = nearest(cRed, bluePoints);
+      if (t) {
         ctx.strokeStyle = "purple";
-        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(cRed.x, cRed.y);
-        ctx.lineTo(nearBlue.x, nearBlue.y);
+        ctx.lineTo(t.x, t.y);
         ctx.stroke();
       }
     }
-
     if (cBlue) {
-      const nearRed = nearest(cBlue, redPoints);
-      if (nearRed) {
+      const t = nearest(cBlue, redPoints);
+      if (t) {
         ctx.strokeStyle = "green";
-        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(cBlue.x, cBlue.y);
-        ctx.lineTo(nearRed.x, nearRed.y);
+        ctx.lineTo(t.x, t.y);
         ctx.stroke();
       }
     }
   }
 }
 
-// 初期描画
 bg.onload = () => draw();
 updateCounter();
 draw();
@@ -300,4 +336,3 @@ draw();
 
 </body>
 </html>
-
