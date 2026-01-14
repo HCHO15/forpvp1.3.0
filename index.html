@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>戦術対抗戦S10　配置確認 1.1.1</title>
+<title>戦術対抗戦S10　配置確認 1.1.2</title>
 <style>
   body { text-align:center; font-family:sans-serif; }
   canvas { border:1px solid #333; touch-action:none; background-size:cover; }
@@ -13,7 +13,7 @@
 </head>
 <body>
 
-<h2>戦術対抗戦S10　配置確認 1.1.1</h2>
+<h2>戦術対抗戦S10　配置確認 1.1.2</h2>
 
 <button id="toggleColor">現在：赤 → 青に切替</button>
 <button id="toggleLine">線の表示 ON/OFF</button>
@@ -32,9 +32,9 @@
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
 
-// 背景画像（2000×1000）
+// 背景画像
 const bg = new Image();
-bg.src = "background.png";  // ← index.html と同じフォルダに置く
+bg.src = "background.png";
 
 let mode = "red"; 
 let showLines = true;
@@ -130,6 +130,18 @@ function updateCounter() {
   b.className = (bluePoints.length === 4) ? "max" : "";
 }
 
+// バッテン描画
+function drawCross(x, y, size, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - size, y - size);
+  ctx.lineTo(x + size, y + size);
+  ctx.moveTo(x + size, y - size);
+  ctx.lineTo(x - size, y + size);
+  ctx.stroke();
+}
+
 // 描画
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -137,7 +149,7 @@ function draw() {
   // 背景画像（最下層）
   ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
 
-  // 点描画（背景の上）
+  // 点描画
   for (const p of redPoints) {
     ctx.fillStyle = "red";
     ctx.beginPath();
@@ -154,21 +166,34 @@ function draw() {
   const cRed = centroid(redPoints);
   const cBlue = centroid(bluePoints);
 
-  // 重心描画
+  // 重心（バッテン）
+  if (cRed) drawCross(cRed.x, cRed.y, 8, "pink");
+  if (cBlue) drawCross(cBlue.x, cBlue.y, 8, "lightblue");
+
+  // 最も近い点を円で強調
   if (cRed) {
-    ctx.fillStyle = "pink";
-    ctx.beginPath();
-    ctx.arc(cRed.x, cRed.y, 6, 0, Math.PI*2);
-    ctx.fill();
-  }
-  if (cBlue) {
-    ctx.fillStyle = "lightblue";
-    ctx.beginPath();
-    ctx.arc(cBlue.x, cBlue.y, 6, 0, Math.PI*2);
-    ctx.fill();
+    const nearBlue = nearest(cRed, bluePoints);
+    if (nearBlue) {
+      ctx.strokeStyle = "rgba(100,150,255,0.5)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(nearBlue.x, nearBlue.y, 14, 0, Math.PI*2);
+      ctx.stroke();
+    }
   }
 
-  // 線の表示 ON のときだけ描画
+  if (cBlue) {
+    const nearRed = nearest(cBlue, redPoints);
+    if (nearRed) {
+      ctx.strokeStyle = "rgba(255,150,150,0.5)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(nearRed.x, nearRed.y, 14, 0, Math.PI*2);
+      ctx.stroke();
+    }
+  }
+
+  // 線の表示
   if (showLines) {
     if (cRed) {
       const nearBlue = nearest(cRed, bluePoints);
@@ -196,13 +221,10 @@ function draw() {
   }
 }
 
-// 背景画像読み込み後に初期描画
-bg.onload = () => {
-  draw();
-};
-
+// 初期描画
+bg.onload = () => draw();
 updateCounter();
-draw();  // ← 初期描画を保証
+draw();
 </script>
 
 </body>
