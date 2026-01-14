@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>戦術対抗戦S10　配置確認 1.2.0</title>
+<title>戦術対抗戦S10　配置確認 1.3.0</title>
 <style>
   body { text-align:center; font-family:sans-serif; }
   canvas { border:1px solid #333; touch-action:none; background-size:cover; }
@@ -28,7 +28,7 @@
 </head>
 <body>
 
-<h2>戦術対抗戦S10　配置確認 1.2.0</h2>
+<h2>戦術対抗戦S10　配置確認 1.3.0</h2>
 
 <button id="toggleColor">現在：赤 → 青に切替</button>
 <button id="toggleLine">線の表示 ON/OFF</button>
@@ -36,9 +36,7 @@
 
 <br>
 
-<button id="mode1">SPアタッカー</button>
-<button id="mode2">SPバフ</button>
-<button id="mode3">STバフ</button>
+<button id="modeToggle">①SP攻撃の対象</button>
 
 <div id="counter">
   赤: <span id="redCount">0</span> / 4　
@@ -50,14 +48,16 @@
   <canvas id="board" width="800" height="400"></canvas>
 
   <div class="description">
+    <p>※PCでの操作を強く推奨※</p>
     <p>左クリックでプロット、右クリックで削除できます。</p>
     <p>ドラッグすると置いた点を動かせます。</p>
-    <p>バツ印が部隊中央、丸で囲まれた点がターゲットを表します。</p>
+    <p>①②ではバツ印が部隊中央、丸で囲まれた点がターゲットを表します。</p>
+    <p>③ではバッファーをダブルクリックで決めてください。</p>
     <p>モード切替：</p>
     <ul>
-      <li>SPアタッカー：重心→異色の最短点</li>
-      <li>SPバフ：重心→同色の最短点</li>
-      <li>STバフ：ダブルクリックした点→同色の最短点</li>
+      <li>①SP攻撃：重心→異色の最短点</li>
+      <li>②SPバフ：重心→同色の最短点</li>
+      <li>③STバフ：ダブルクリックした点→同色の最短点</li>
     </ul>
   </div>
 
@@ -79,7 +79,7 @@ let bluePoints = [];
 let dragging = false;
 let dragTarget = null;
 
-let modeType = 1; // 1=SPアタッカー, 2=SPバフ, 3=STバフ
+let modeType = 1; // 1=SP攻撃, 2=SPバフ, 3=STバフ
 let selectedPoint = null;
 
 // 色切替
@@ -95,10 +95,18 @@ document.getElementById("toggleLine").onclick = () => {
   draw();
 };
 
-// モード切替
-document.getElementById("mode1").onclick = () => { modeType = 1; selectedPoint = null; draw(); };
-document.getElementById("mode2").onclick = () => { modeType = 2; selectedPoint = null; draw(); };
-document.getElementById("mode3").onclick = () => { modeType = 3; selectedPoint = null; draw(); };
+// モード切替（1→2→3→1…）
+document.getElementById("modeToggle").onclick = () => {
+  modeType = (modeType % 3) + 1;
+  selectedPoint = null;
+
+  const btn = document.getElementById("modeToggle");
+  if (modeType === 1) btn.textContent = "①SP攻撃の対象";
+  if (modeType === 2) btn.textContent = "②SPバフの対象";
+  if (modeType === 3) btn.textContent = "③STバフの対象";
+
+  draw();
+};
 
 // リセット
 document.getElementById("reset").onclick = () => {
@@ -199,11 +207,11 @@ function centroid(points) {
   return {x,y};
 }
 
-// 最も近い点
-function nearest(from, list) {
-  if (!from || list.length === 0) return null;
+// 最も近い点（自分自身を除外可能）
+function nearest(from, list, excludeSelf=false) {
   let best = null, bestDist = Infinity;
   for (const p of list) {
+    if (excludeSelf && p.x === from.x && p.y === from.y) continue;
     const d = Math.hypot(p.x - from.x, p.y - from.y);
     if (d < bestDist) { bestDist = d; best = p; }
   }
@@ -265,7 +273,7 @@ function draw() {
 
   // === モード別ターゲット表示 ===
 
-  // 1. SPアタッカー（重心→異色）
+  // ① SP攻撃（重心→異色）
   if (modeType === 1) {
     if (cRed) {
       const t = nearest(cRed, bluePoints);
@@ -277,7 +285,7 @@ function draw() {
     }
   }
 
-  // 2. SPバフ（重心→同色）
+  // ② SPバフ（重心→同色）
   if (modeType === 2) {
     if (cRed) {
       const t = nearest(cRed, redPoints);
@@ -289,23 +297,23 @@ function draw() {
     }
   }
 
-  // 3. STバフ（基準点→同色）
+  // ③ STバフ（基準点→同色、自分自身を除外）
   if (modeType === 3 && selectedPoint) {
     drawCross(selectedPoint.x, selectedPoint.y, 10, "yellow");
 
     if (selectedPoint.color === "red") {
-      const t = nearest(selectedPoint, redPoints);
+      const t = nearest(selectedPoint, redPoints, true);
       if (t) drawCircle(t.x, t.y, "rgba(255,150,150,0.5)");
     }
 
     if (selectedPoint.color === "blue") {
-      const t = nearest(selectedPoint, bluePoints);
+      const t = nearest(selectedPoint, bluePoints, true);
       if (t) drawCircle(t.x, t.y, "rgba(100,150,255,0.5)");
     }
   }
 
-  // 線表示
-  if (showLines) {
+  // 線表示（SP攻撃のみ）
+  if (showLines && modeType === 1) {
     if (cRed) {
       const t = nearest(cRed, bluePoints);
       if (t) {
