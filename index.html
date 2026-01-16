@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>戦術対抗戦S10　配置確認 1.8.0</title>
+<title>戦術対抗戦S10　配置確認 2.0.0</title>
 <style>
   body { text-align:center; font-family:sans-serif; margin:0; padding:0; }
 
@@ -68,7 +68,7 @@
 </head>
 <body>
 
-<h2>戦術対抗戦S10　配置確認 1.8.0</h2>
+<h2>戦術対抗戦S10　配置確認 2.0.0</h2>
 
 <button id="toggleColor">現在：赤 → 青に切替</button>
 <button id="toggleLine">線の表示 ON/OFF</button>
@@ -77,12 +77,19 @@
 
 <br>
 
-<button id="modeToggle">①SP攻撃の対象</button>
+<!-- 機能カテゴリ選択 -->
+<label for="modeSelect">機能：</label>
+<select id="modeSelect">
+  <option value="sp">SP用</option>
+  <option value="st">ST用</option>
+</select>
 
-<!-- ★ 機能3専用プルダウン（最初は非表示） -->
-<select id="skillSelect" style="display:none; margin-left:10px;">
-  <option value="buffer">バッファー</option>
-  <option value="hanako">ハナコ（水着）</option>
+<!-- サブ機能選択（内容はカテゴリに応じて変化） -->
+<label for="subSelect" style="margin-left:8px;">詳細：</label>
+<select id="subSelect">
+  <!-- SP用のとき：攻撃SP / バフSP -->
+  <option value="sp_attack">攻撃SP</option>
+  <option value="sp_buff">バフSP</option>
 </select>
 
 <div id="counter">
@@ -105,18 +112,29 @@
 <div class="description">
   <h3>ツールの使い方</h3>
   <p>このツールは、戦術対抗戦の部隊配置を視覚的に確認するためのものです。</p>
+
   <p><strong>● 点の操作</strong></p>
   <ul>
     <li>左クリック / タップ：点を追加</li>
     <li>右クリック / 長押し：点を削除</li>
     <li>ドラッグ / スワイプ：点を移動</li>
-    <li>ダブルクリック / ダブルタップ：STバフの基準点を選択</li>
+    <li>ダブルクリック / ダブルタップ：ST用の基準点を選択</li>
   </ul>
-  <p><strong>● モード説明</strong></p>
+
+  <p><strong>● 機能構成</strong></p>
   <ul>
-    <li>① SP攻撃：重心 → 異色の最短点</li>
-    <li>② SPバフ：重心 → 同色の最短点</li>
-    <li>③ STバフ：選択点 → 同色の最短点（自分を除外）＋追加機能</li>
+    <li>機能：SP用
+      <ul>
+        <li>攻撃SP：重心 → 異色の最短点</li>
+        <li>バフSP：重心 → 同色の最短点</li>
+      </ul>
+    </li>
+    <li>機能：ST用
+      <ul>
+        <li>バッファー：選択点 → 同色の最短点（円で強調）</li>
+        <li>ハナコ（水着）：選択点 → 異色の最短点方向に扇形</li>
+      </ul>
+    </li>
   </ul>
 </div>
 
@@ -127,8 +145,8 @@ const ctx = canvas.getContext("2d");
 const bg = new Image();
 bg.src = "background.png";
 
-let mode = "red";
-let showLines = true;
+let mode = "red";              // 追加する点の色
+let showLines = true;          // SP攻撃時の線表示
 
 let redPoints = [];
 let bluePoints = [];
@@ -136,11 +154,15 @@ let bluePoints = [];
 let dragging = false;
 let dragTarget = null;
 
-let modeType = 1;
-let selectedPoint = null;
+let selectedPoint = null;      // ST用の基準点
 
 let lastTapTime = 0;
 let longPressTimer = null;
+
+// 機能カテゴリとサブ機能
+let modeCategory = "sp";       // "sp" or "st"
+let spMode = "sp_attack";      // "sp_attack" or "sp_buff"
+let stMode = "st_buffer";      // "st_buffer" or "st_hanako"
 
 function resizeCanvas() {
   const w = Math.min(window.innerWidth * 0.9, 800);
@@ -152,6 +174,7 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
+// ===== マウス・タッチ操作 =====
 canvas.addEventListener("mousedown", (e) => {
   const {x, y} = getPos(e);
   dragTarget = findPoint(x, y);
@@ -218,6 +241,7 @@ canvas.addEventListener("touchend", (e) => {
   dragTarget = null;
 });
 
+// ===== 共通関数 =====
 function getPos(e) {
   const rect = canvas.getBoundingClientRect();
   return { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -246,8 +270,22 @@ function deletePoint(x, y) {
 }
 
 function setSelectedPoint(x, y) {
-  for (const p of redPoints) if (dist(p, {x,y}) < 12) { selectedPoint = {...p, color:"red"}; draw(); updateCoordPanel(); return; }
-  for (const p of bluePoints) if (dist(p, {x,y}) < 12) { selectedPoint = {...p, color:"blue"}; draw(); updateCoordPanel(); return; }
+  for (const p of redPoints) {
+    if (dist(p, {x,y}) < 12) {
+      selectedPoint = {...p, color:"red"};
+      draw();
+      updateCoordPanel();
+      return;
+    }
+  }
+  for (const p of bluePoints) {
+    if (dist(p, {x,y}) < 12) {
+      selectedPoint = {...p, color:"blue"};
+      draw();
+      updateCoordPanel();
+      return;
+    }
+  }
 }
 
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
@@ -276,6 +314,7 @@ function updateCounter() {
   redCount.className = redPoints.length === 4 ? "max" : "";
   blueCount.className = bluePoints.length === 4 ? "max" : "";
 }
+
 // ===== 座標パネル更新（内部 → 中央原点） =====
 function updateCoordPanel() {
   const panel = document.getElementById("coordList");
@@ -373,53 +412,69 @@ function draw() {
   if (cRed) drawCross(cRed.x, cRed.y, 10, "pink");
   if (cBlue) drawCross(cBlue.x, cBlue.y, 10, "lightblue");
 
-  // ===== モード別ターゲット表示 =====
+  // ===== 機能カテゴリ別処理 =====
 
-  // ① SP攻撃（重心→異色）
-  if (modeType === 1) {
-    if (cRed) {
-      const t = nearest(cRed, bluePoints);
-      if (t) drawCircle(t.x, t.y, "pink");
+  // ■ SP用
+  if (modeCategory === "sp") {
+    // 攻撃SP：重心 → 異色の最短点（線あり）
+    if (spMode === "sp_attack") {
+      if (cRed) {
+        const t = nearest(cRed, bluePoints);
+        if (t) {
+          drawCircle(t.x, t.y, "pink");
+          if (showLines) {
+            ctx.strokeStyle = "purple";
+            ctx.beginPath();
+            ctx.moveTo(cRed.x, cRed.y);
+            ctx.lineTo(t.x, t.y);
+            ctx.stroke();
+          }
+        }
+      }
+      if (cBlue) {
+        const t = nearest(cBlue, redPoints);
+        if (t) {
+          drawCircle(t.x, t.y, "lightblue");
+          if (showLines) {
+            ctx.strokeStyle = "green";
+            ctx.beginPath();
+            ctx.moveTo(cBlue.x, cBlue.y);
+            ctx.lineTo(t.x, t.y);
+            ctx.stroke();
+          }
+        }
+      }
     }
-    if (cBlue) {
-      const t = nearest(cBlue, redPoints);
-      if (t) drawCircle(t.x, t.y, "lightblue");
+
+    // バフSP：重心 → 同色の最短点（線なし）
+    if (spMode === "sp_buff") {
+      if (cRed) {
+        const t = nearest(cRed, redPoints);
+        if (t) drawCircle(t.x, t.y, "rgba(255,150,150,0.5)");
+      }
+      if (cBlue) {
+        const t = nearest(cBlue, bluePoints);
+        if (t) drawCircle(t.x, t.y, "rgba(100,150,255,0.5)");
+      }
     }
   }
 
-  // ② SPバフ（重心→同色）
-  if (modeType === 2) {
-    if (cRed) {
-      const t = nearest(cRed, redPoints);
-      if (t) drawCircle(t.x, t.y, "rgba(255,150,150,0.5)");
-    }
-    if (cBlue) {
-      const t = nearest(cBlue, bluePoints);
-      if (t) drawCircle(t.x, t.y, "rgba(100,150,255,0.5)");
-    }
-  }
-
-  // ③ STバフ（機能3アップデート）
-  if (modeType === 3 && selectedPoint) {
+  // ■ ST用
+  if (modeCategory === "st" && selectedPoint) {
     const p = selectedPoint;
-
-    // プルダウンの選択状態
-    const skill = document.getElementById("skillSelect").value;
-
-    // 同色・異色リスト
     const sameList = p.color === "red" ? redPoints : bluePoints;
     const enemyList = p.color === "red" ? bluePoints : redPoints;
 
-    // ★ バッファー：同色の最寄り点を円で囲む（扇形なし）
-    if (skill === "buffer") {
+    // バッファー：同色の最寄り点を円で囲む
+    if (stMode === "st_buffer") {
       const t = nearest(p, sameList, true);
       if (t) {
         drawCircle(t.x, t.y, "rgba(255,255,0,0.6)");
       }
     }
 
-    // ★ ハナコ（水着）：異色の最寄り点方向に扇形（円なし）
-    if (skill === "hanako") {
+    // ハナコ（水着）：異色の最寄り点方向に扇形
+    if (stMode === "st_hanako") {
       const t = nearest(p, enemyList);
       if (t) {
         const fillColor = p.color === "red"
@@ -430,8 +485,7 @@ function draw() {
         const angle = Math.PI / 3;
         const half = angle / 2;
 
-        let baseAngle = Math.atan2(t.y - p.y, t.x - p.x);
-
+        const baseAngle = Math.atan2(t.y - p.y, t.x - p.x);
         const startAngle = baseAngle - half;
         const endAngle = baseAngle + half;
 
@@ -441,30 +495,6 @@ function draw() {
         ctx.closePath();
         ctx.fillStyle = fillColor;
         ctx.fill();
-      }
-    }
-  }
-
-  // 線表示（SP攻撃のみ）
-  if (showLines && modeType === 1) {
-    if (cRed) {
-      const t = nearest(cRed, bluePoints);
-      if (t) {
-        ctx.strokeStyle = "purple";
-        ctx.beginPath();
-        ctx.moveTo(cRed.x, cRed.y);
-        ctx.lineTo(t.x, t.y);
-        ctx.stroke();
-      }
-    }
-    if (cBlue) {
-      const t = nearest(cBlue, redPoints);
-      if (t) {
-        ctx.strokeStyle = "green";
-        ctx.beginPath();
-        ctx.moveTo(cBlue.x, cBlue.y);
-        ctx.lineTo(t.x, t.y);
-        ctx.stroke();
       }
     }
   }
@@ -489,27 +519,35 @@ function drawCircle(x, y, color) {
   ctx.stroke();
 }
 
-// ===== ボタン処理 =====
-document.getElementById("modeToggle").onclick = () => {
-  modeType = (modeType % 3) + 1;
-  selectedPoint = null;
+// ===== UIイベント =====
+document.getElementById("modeSelect").onchange = (e) => {
+  modeCategory = e.target.value;
 
-  const btn = document.getElementById("modeToggle");
-  const skill = document.getElementById("skillSelect");
+  const sub = document.getElementById("subSelect");
+  sub.innerHTML = "";
 
-  if (modeType === 1) {
-    btn.textContent = "①SP攻撃の対象";
-    skill.style.display = "none";
-  }
-  if (modeType === 2) {
-    btn.textContent = "②SPバフの対象";
-    skill.style.display = "none";
-  }
-  if (modeType === 3) {
-    btn.textContent = "③STバフの対象";
-    skill.style.display = "inline-block"; // ★ プルダウン表示
+  if (modeCategory === "sp") {
+    // SP用：攻撃SP / バフSP
+    sub.appendChild(new Option("攻撃SP", "sp_attack"));
+    sub.appendChild(new Option("バフSP", "sp_buff"));
+    spMode = "sp_attack";
+  } else {
+    // ST用：バッファー / ハナコ（水着）
+    sub.appendChild(new Option("バフ", "st_buffer"));
+    sub.appendChild(new Option("ハナコ（水着）", "st_hanako"));
+    stMode = "st_buffer";
   }
 
+  draw();
+};
+
+document.getElementById("subSelect").onchange = (e) => {
+  const v = e.target.value;
+  if (v === "sp_attack" || v === "sp_buff") {
+    spMode = v;
+  } else if (v === "st_buffer" || v === "st_hanako") {
+    stMode = v;
+  }
   draw();
 };
 
