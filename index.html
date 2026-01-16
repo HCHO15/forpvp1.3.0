@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>戦術対抗戦S10　配置確認 2.1.0</title>
+<title>戦術対抗戦S10　配置確認 2.2.0</title>
 <style>
   body { text-align:center; font-family:sans-serif; margin:0; padding:0; }
 
@@ -68,7 +68,7 @@
 </head>
 <body>
 
-<h2>戦術対抗戦S10　配置確認 2.1.0</h2>
+<h2>戦術対抗戦S10　配置確認 2.2.0</h2>
 
 <button id="toggleColor">現在：赤 → 青に切替</button>
 <button id="toggleLine">線の表示 ON/OFF</button>
@@ -310,6 +310,66 @@ function updateCounter() {
   redCount.className = redPoints.length === 4 ? "max" : "";
   blueCount.className = bluePoints.length === 4 ? "max" : "";
 }
+// ===== 座標パネル更新（内部 → 中央原点） =====
+function updateCoordPanel() {
+  const panel = document.getElementById("coordList");
+  panel.innerHTML = "";
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+
+  function addRow(color, index, point) {
+    const id = `${color}${index}`;
+    let x = "";
+    let y = "";
+
+    if (point) {
+      x = (point.x - cx).toFixed(1);
+      y = (point.y - cy).toFixed(1);
+    }
+
+    panel.innerHTML += `
+      <div>
+        ${color === "red" ? "赤" : "青"}${index}：
+        X <input type="number" step="0.1" id="${id}_x" value="${x}">
+        Y <input type="number" step="0.1" id="${id}_y" value="${y}">
+      </div>
+    `;
+  }
+
+  for (let i = 1; i <= 4; i++) addRow("red", i, redPoints[i-1]);
+  for (let i = 1; i <= 4; i++) addRow("blue", i, bluePoints[i-1]);
+}
+
+// ===== 座標反映（中央原点 → 内部） =====
+document.getElementById("applyCoords").onclick = () => {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+
+  function apply(color) {
+    const newList = [];
+    for (let i = 1; i <= 4; i++) {
+      const x = document.getElementById(`${color}${i}_x`).value;
+      const y = document.getElementById(`${color}${i}_y`).value;
+
+      if (x !== "" && y !== "") {
+        newList.push({
+          x: Number(x) + cx,
+          y: Number(y) + cy
+        });
+      }
+    }
+    return newList;
+  }
+
+  redPoints = apply("red");
+  bluePoints = apply("blue");
+
+  updateCounter();
+  draw();
+  updateCoordPanel();
+};
+
 // ===== 描画 =====
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
